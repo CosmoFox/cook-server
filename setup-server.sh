@@ -189,6 +189,12 @@ step_swap() {
         rm -f "${SWAPFILE}"
     fi
 
+    log_info "Проверка свободного места для swap (нужно > 2 ГБ)..."
+    FREE_SPACE=$(df / | tail -1 | awk '{print $4}')
+    if [ "$FREE_SPACE" -lt 2097152 ]; then
+        log_error "Недостаточно места для создания swap-файла (требуется более 2 ГБ)."
+        return 1
+    fi
     log_info "Создание swap-файла размером 2 ГБ..."
     dd if=/dev/zero of="${SWAPFILE}" bs=1M count=2048
     chmod 600 "${SWAPFILE}"
