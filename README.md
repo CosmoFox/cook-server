@@ -10,6 +10,20 @@
 
 ## Быстрый старт
 
+### Запуск напрямую из GitHub (рекомендуется)
+
+```bash
+bash <(curl -s https://raw.githubusercontent.com/CosmoFox/cook-server/main/setup-server.sh)
+```
+
+Или через `wget`:
+
+```bash
+bash <(wget -qO- https://raw.githubusercontent.com/CosmoFox/cook-server/main/setup-server.sh)
+```
+
+### Локальный запуск
+
 ### 1. Скопируйте файлы на сервер
 
 ```bash
@@ -20,7 +34,7 @@ scp setup-server.sh root@<IP-сервера>:/<Путь>/
 Или клонируйте репозиторий:
 
 ```bash
-git clone <repo> /opt/cook-server
+git clone https://github.com/CosmoFox/cook-server.git /opt/cook-server
 cd /opt/cook-server
 ```
 
