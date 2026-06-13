@@ -38,7 +38,7 @@ if [[ ! -f "${TOKEN_FILE}" ]]; then
     echo ""
     echo -e "${CYAN}Хотите сгенерировать новую SSH-связку ключей?${NC}"
     echo -e "  Открытый ключ будет сохранён в ${TOKEN_FILE}"
-    echo -e "  Закрытый ключ будет сохранён в ${SCRIPT_DIR}/id_ed25519 (или id_rsa)"
+    echo -e "  Закрытый ключ будет сохранён рядом со скриптом"
     echo ""
     read -p "Сгенерировать ключи? [y/N]: " GENERATE_CHOICE
 
@@ -55,21 +55,61 @@ if [[ ! -f "${TOKEN_FILE}" ]]; then
             2)
                 KEY_TYPE="rsa"
                 KEY_BITS="4096"
-                KEY_NAME="id_rsa"
+                KEY_PREFIX="id_rsa"
                 KEYGEN_ARGS="-t rsa -b ${KEY_BITS} -m PEM"
                 ;;
             *)
                 KEY_TYPE="ed25519"
                 KEY_BITS=""
-                KEY_NAME="id_ed25519"
+                KEY_PREFIX="id_ed25519"
                 KEYGEN_ARGS="-t ed25519"
+                ;;
+        esac
+
+        # Выбор имени ключа
+        echo ""
+        echo -e "${CYAN}Как назвать файл ключа?${NC}"
+        echo -e "  1. По hostname: ${KEY_PREFIX}_$(hostname -s 2>/dev/null || echo 'hostname')"
+        echo -e "  2. По IP: ${KEY_PREFIX}_<ip-адрес>"
+        echo -e "  3. Hostname + IP: ${KEY_PREFIX}_$(hostname -s 2>/dev/null || echo 'hostname')_<ip>"
+        echo -e "  4. Ввести вручную"
+        echo ""
+        read -p "Вариант [1/2/3/4]: " KEY_NAME_CHOICE
+
+        SERVER_IP=""
+        case "${KEY_NAME_CHOICE}" in
+            2|3)
+                SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "")
+                if [[ -z "${SERVER_IP}" ]]; then
+                    read -p "IP-адрес сервера: " SERVER_IP
+                fi
+                ;;
+        esac
+
+        case "${KEY_NAME_CHOICE}" in
+            1)
+                KEY_NAME="${KEY_PREFIX}_$(hostname -s 2>/dev/null || echo 'server')"
+                ;;
+            2)
+                KEY_NAME="${KEY_PREFIX}_${SERVER_IP}"
+                ;;
+            3)
+                KEY_NAME="${KEY_PREFIX}_$(hostname -s 2>/dev/null || echo 'server')_${SERVER_IP}"
+                ;;
+            4)
+                read -p "Введите имя файла ключа: " KEY_NAME
+                KEY_NAME="${KEY_PREFIX}_${KEY_NAME}"
+                ;;
+            *)
+                KEY_NAME="${KEY_PREFIX}_$(hostname -s 2>/dev/null || echo 'server')"
+                log_warn "Неверный выбор, используем hostname."
                 ;;
         esac
 
         KEY_PATH="${SCRIPT_DIR}/${KEY_NAME}"
 
         log_info "Генерация ${KEY_TYPE^^} ключа..."
-        ssh-keygen ${KEYGEN_ARGS} -f "${KEY_PATH}" -N "" -C "root@vps"
+        ssh-keygen ${KEYGEN_ARGS} -f "${KEY_PATH}" -N "" -C "root@${SERVER_IP:-$(hostname -s 2>/dev/null || echo 'vps')}"
 
         # Открытый ключ → .token
         cp "${KEY_PATH}.pub" "${TOKEN_FILE}"
