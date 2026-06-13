@@ -119,6 +119,19 @@ if [[ ! -f "${TOKEN_FILE}" ]]; then
         chmod 600 "${KEY_PATH}"
         log_info "Закрытый ключ сохранён в ${KEY_PATH}"
 
+        # Опция генерации .ppk для PuTTY
+        echo ""
+        read -p "Сгенерировать также .ppk для PuTTY? [y/N]: " PUTTY_CHOICE
+        if [[ "${PUTTY_CHOICE}" =~ ^[Yy]$ ]]; then
+            if command -v puttygen &>/dev/null; then
+                puttygen "${KEY_PATH}" -o "${KEY_PATH}.ppk"
+                chmod 600 "${KEY_PATH}.ppk"
+                log_info "PuTTY-ключ сохранён в ${KEY_PATH}.ppk"
+            else
+                log_warn "puttygen не найден. Установите: apt install -y putty-tools"
+            fi
+        fi
+
         echo ""
         echo -e "${RED}════════════════════════════════════════${NC}"
         echo -e "${RED}  ⚠  ВНИМАНИЕ! НЕ ПРОДОЛЖАЙТЕ!  ⚠${NC}"
