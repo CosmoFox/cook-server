@@ -159,7 +159,7 @@ if [[ ! -f "${TOKEN_FILE}" ]]; then
     fi
 fi
 
-SSH_AUTHORIZED_KEY="$(cat "${TOKEN_FILE}" | tr -d '[:space:]')"
+SSH_AUTHORIZED_KEY="$(cat "${TOKEN_FILE}" | xargs)"
 
 if [[ -z "${SSH_AUTHORIZED_KEY}" ]]; then
     log_error "Файл ${TOKEN_FILE} пуст."
