@@ -135,7 +135,20 @@ if [[ ! -f "${TOKEN_FILE}" ]]; then
                 chmod 600 "${KEY_PATH}.ppk"
                 log_info "PuTTY-ключ сохранён в ${KEY_PATH}.ppk"
             else
-                log_warn "puttygen не найден. Установите: apt install -y putty-tools"
+                log_warn "puttygen не найден."
+                echo ""
+                read -p "Установить putty-tools? [y/N]: " INSTALL_PUTTY
+                if [[ "${INSTALL_PUTTY}" =~ ^[Yy]$ ]]; then
+                    apt install -y putty-tools
+                    puttygen "${KEY_PATH}" -o "${KEY_PATH}.ppk"
+                    chmod 600 "${KEY_PATH}.ppk"
+                    log_info "PuTTY-ключ сохранён в ${KEY_PATH}.ppk"
+                else
+                    log_warn "Удаление созданных ключей для безопасного перезапуска..."
+                    rm -f "${KEY_PATH}" "${KEY_PATH}.pub" "${TOKEN_FILE}"
+                    log_error "Запустите скрипт заново, когда puttygen будет доступен."
+                    exit 1
+                fi
             fi
         fi
 
