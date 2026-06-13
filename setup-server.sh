@@ -31,6 +31,13 @@ fi
 # Загрузка токенов из внешнего файла
 # ==============================
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# При запуске через bash <(curl ...) $0 указывает на /dev/fd/ —
+# в таком случае сохраняем ключи и .token в текущем каталоге
+if [[ "${SCRIPT_DIR}" == /dev/* ]] || [[ "${SCRIPT_DIR}" == /proc/* ]]; then
+    SCRIPT_DIR="${PWD}"
+fi
+
 TOKEN_FILE="${SCRIPT_DIR}/.token"
 
 if [[ ! -f "${TOKEN_FILE}" ]]; then
