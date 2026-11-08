@@ -100,21 +100,23 @@ fi
 
 OS_SUPPORTED=false
 case "${OS_ID}" in
-	ubuntu)
-		if [[ " 20.04 22.04 24.04 " == *" ${OS_VERSION} "* ]]; then
-			OS_SUPPORTED=true
-		fi
-		;;
-	debian)
-		if [[ " 11 12 " == *" ${OS_VERSION} "* ]]; then
-			OS_SUPPORTED=true
-		fi
-		;;
+# Только LTS-релизы Ubuntu
+ubuntu)
+	if [[ " 20.04 22.04 24.04 26.04 " == *" ${OS_VERSION} "* ]]; then
+		OS_SUPPORTED=true
+	fi
+	;;
+debian)
+	# Debian 11 (bullseye) исключён намеренно: LTS закончилась 2026-08-31
+	if [[ " 12 13 " == *" ${OS_VERSION} "* ]]; then
+		OS_SUPPORTED=true
+	fi
+	;;
 esac
 
 if [[ "${OS_SUPPORTED}" != true ]]; then
 	log_warn "Обнаружена неподдерживаемая ОС: ${OS_PRETTY}."
-	log_warn "Скрипт рассчитан на Ubuntu 20.04 / 22.04 / 24.04 и Debian 11 / 12."
+	log_warn "Скрипт рассчитан на Ubuntu 20.04 / 22.04 / 24.04 / 26.04 и Debian 12 / 13."
 	if [[ "${ARGS_YES}" != true ]]; then
 		read -p "Продолжить на свой страх и риск? [y/N]: " OS_CONFIRM
 		if [[ ! "${OS_CONFIRM}" =~ ^[Yy]$ ]]; then
@@ -318,6 +320,10 @@ fi
 
 # 1. Обновление системы
 step_update() {
+	# Возвращаем errexit: шаг вызывается из "if !", где set -e отключён,
+	# без этого падение промежуточной команды не считалось бы ошибкой шага
+	set -e
+
 	log_info "Обновление списков пакетов..."
 	apt update -y
 
@@ -331,11 +337,20 @@ step_update() {
 
 # 2. Установка базовых пакетов
 step_packages() {
+	set -e
+
 	log_info "Установка базовых пакетов..."
+
+	# На Debian mcedit — виртуальный пакет, его предоставляет mc
+	EDITOR_PKG="mcedit"
+	if [[ "${OS_ID}" == "debian" ]]; then
+		EDITOR_PKG="mc"
+	fi
+
 	apt install -y \
 		curl \
 		htop \
-		mcedit \
+		"${EDITOR_PKG}" \
 		fail2ban \
 		openssh-server \
 		openssh-client
@@ -344,6 +359,8 @@ step_packages() {
 
 # 3. Установка Docker
 step_docker() {
+	set -e
+
 	log_info "Проверка установки Docker..."
 	if command -v docker &>/dev/null; then
 		log_warn "Docker уже установлен, пропускаем."
@@ -376,6 +393,8 @@ step_docker() {
 
 # 4. Настройка swap-файла (2 ГБ)
 step_swap() {
+	set -e
+
 	log_info "Настройка swap..."
 
 	# Умеренное свопирование при активном swap-файле
@@ -383,8 +402,10 @@ step_swap() {
 vm.swappiness=10
 EOF
 	if command -v sysctl &>/dev/null; then
-		sysctl -p /etc/sysctl.d/99-swap.conf >/dev/null
-		log_info "vm.swappiness=10 применён."
+		# Не критично: значение всё равно применится после перезагрузки
+		sysctl -p /etc/sysctl.d/99-swap.conf >/dev/null 2>&1 ||
+			log_warn "vm.swappiness применится после перезагрузки."
+		log_info "vm.swappiness=10 настроен."
 	fi
 
 	SWAPFILE="/swapfile"
@@ -420,6 +441,8 @@ EOF
 
 # 5. Настройка UFW
 step_ufw() {
+	set -e
+
 	log_info "Настройка UFW..."
 
 	# UFW откроет порт 2288 — убеждаемся, что SSH там действительно слушает,
@@ -460,6 +483,8 @@ step_ufw() {
 
 # 6. Настройка SSH
 step_ssh() {
+	set -e
+
 	log_info "Настройка SSH..."
 
 	# Без валидного ключа отключение пароля заблокирует сервер —
@@ -518,17 +543,25 @@ EOF
 	fi
 
 	if systemctl is-active --quiet ssh; then
-		systemctl restart ssh
+		SSH_SERVICE="ssh"
 	elif systemctl is-active --quiet sshd; then
-		systemctl restart sshd
+		SSH_SERVICE="sshd"
 	else
-		systemctl restart ssh
+		SSH_SERVICE="ssh"
+	fi
+
+	if ! systemctl restart "${SSH_SERVICE}"; then
+		log_error "Не удалось перезапустить сервис ${SSH_SERVICE}."
+		log_error "Проверьте вручную: systemctl status ${SSH_SERVICE}"
+		return 1
 	fi
 	log_info "SSH настроен: порт 2288, только ключи, root по ключу."
 }
 
 # 7. Настройка fail2ban
 step_fail2ban() {
+	set -e
+
 	log_info "Настройка fail2ban..."
 
 	cat >/etc/fail2ban/jail.local <<'EOF'
@@ -558,6 +591,8 @@ EOF
 
 # 8. Автообновления безопасности
 step_autoupdate() {
+	set -e
+
 	log_info "Настройка автоматических обновлений безопасности..."
 
 	apt install -y unattended-upgrades
