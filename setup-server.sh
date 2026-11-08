@@ -506,6 +506,8 @@ KbdInteractiveAuthentication no
 PermitEmptyPasswords no
 X11Forwarding no
 MaxAuthTries 3
+# Без VERBOSE sshd не пишет неудачные входы по ключу — fail2ban (шаг 7) слеп
+LogLevel VERBOSE
 UsePAM yes
 AcceptEnv LANG LC_*
 Subsystem sftp /usr/lib/openssh/sftp-server
@@ -564,17 +566,33 @@ step_fail2ban() {
 
 	log_info "Настройка fail2ban..."
 
-	cat >/etc/fail2ban/jail.local <<'EOF'
+	if [ -f /var/log/auth.log ]; then
+		# Классический путь: rsyslog пишет auth.log — читаем файл,
+		# детерминированно и без зависимости от journald
+		SSHD_BACKEND="polling"
+		SSHD_LOGSOURCE="logpath = /var/log/auth.log"
+	else
+		# Минимальные системы без rsyslog: читаем journal напрямую.
+		# На Debian/Ubuntu sshd логирует под юнитом ssh.service, не sshd.service
+		SSHD_BACKEND="systemd"
+		SSHD_LOGSOURCE="journalmatch = _SYSTEMD_UNIT=ssh.service + _COMM=sshd"
+	fi
+
+	cat >/etc/fail2ban/jail.local <<EOF
 [DEFAULT]
 bantime  = 24h
 findtime = 10m
 maxretry = 3
-backend  = systemd
 
 [sshd]
 enabled = true
 port    = 2288
-filter  = sshd
+# publickey=any: неудачные входы по ключу считаются нарушениями.
+# По умолчанию фильтр их игнорирует — и при парольном входе, отключённом
+# в шаге 6, бан вообще не срабатывал бы
+filter  = sshd[publickey=any]
+backend = ${SSHD_BACKEND}
+${SSHD_LOGSOURCE}
 
 [recidive]
 enabled  = true
@@ -586,7 +604,7 @@ maxretry = 3
 EOF
 
 	systemctl enable --now fail2ban
-	log_info "fail2ban настроен."
+	log_info "fail2ban настроен (бэкенд: ${SSHD_BACKEND})."
 }
 
 # 8. Автообновления безопасности
